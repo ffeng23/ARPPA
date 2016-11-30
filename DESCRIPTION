@@ -1,0 +1,23 @@
+Package: ARPPA
+Title: An R Package for Protoarray Analysis
+Version: 0.0.0.9000
+Authors@R: person("Feng", "Feng", email = "ffeng@BU.edu", role = c("aut", "cre"))
+Author: Feng Feng [aut, cre]
+Maintainer: Feng Feng <ffeng@bu.edu>
+Depends:
+    R (>= 3.2.0)
+Imports:
+    limma,
+    MASS
+Description: An R package to read, preprocess and analyze protoarray data
+License: MIT + file LICENSE
+LazyData: TRUE
+URL: https://github.com/ffeng23/ARPPA
+SystemRequirements: NA
+Collate:
+    'fileIO.R'
+    'ARPPA.R'
+    'data.R'
+    'eBayes.R'
+    'stats.R'
+RoxygenNote: 5.0.1
