@@ -10,10 +10,25 @@
 ##	function for testing
 ##
 ##	Oct 1st, 2016 Feng@BU
+##----------------------------
+## ==update===
+## Dec 13, 2016 Feng
+##   add code to do FDR so to see how it behave with FDR analysis
+##			reasoning: why do this? Since don't know the prob of differential interaction
+##
+##  =======update========
+## Dec 15, 2016 Feng
+##    write the code to wrap up analysis into functions
+##		see functionAnalysis.r for the function definition
+##		
+##
 ##########################################
 library(ARPPA)
+library(qvalue)
+#install.packages("pROC")
+library(pROC)
 ##first checking for homoscedastical dataset
-setwd("H:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_NegativeCon")
+setwd("E:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_NegativeCon")
 nGene<-2000
 nTreatment<-2   #number of different beta
 sampleSize<-5 ##this is the number of repeats for each group
@@ -63,13 +78,13 @@ dExp_EN<-matrix2dframe(dataExp_EN, nTreatment, sampleSize);
 #now do the linear regression with interaction 
 lreg_EN<-lm(exp~gene*group, data=dExp_EN)
 lregSm<-summary(lreg_EN)
-lstToSave<-list("data"=dataExp_EN_List, "lregCoef"=lregSm$coefficients, "sd.prior"=r2);
+lstToSave<-list("data"=dataExp_EN_List, "lregCoef"=lregSm$coefficients, "var.prior"=r2);
 save(lstToSave, file=paste("result_",i,".RData",sep=""));
 }
 
 ###############
 set.seed(2005)
-setwd("H:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_IsotypeCon")
+setwd("E:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_IsotypeCon")
 for(j in c(2:repeats))
 {
 cat("doing ", j, "/",repeats," analyses....\n")
@@ -100,14 +115,14 @@ dExp_EI<-matrix2dframe(dataExp_EI, nTreatment, sampleSize);
 #now do the linear regression with interaction 
 lreg_EI<-lm(exp~gene*group, data=dExp_EI)
 lregSm_EI<-summary(lreg_EI)
-lstToSave_EI<-list("data"=dataExp_EI_List, "lregCoef"=lregSm_EI$coefficients, "sd.prior"=r2);
+lstToSave_EI<-list("data"=dataExp_EI_List, "lregCoef"=lregSm_EI$coefficients, "var.prior"=r2);
 save(lstToSave_EI, file=paste("result_",j,".RData",sep=""));
 cat("Done!!\n")
 }
 
 #####################
 set.seed(2006)
-setwd("H:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_Uncontrol")
+setwd("E:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_Uncontrol")
 for(k in c(2:repeats))
 {
 cat("doing ", k, "/",repeats," analyses....\n")
@@ -138,7 +153,7 @@ dExp_ENC<-matrix2dframe(dataExp_ENC, nTreatment, sampleSize);
 #now do the linear regression with interaction 
 lreg_ENC<-lm(exp~gene*group, data=dExp_ENC)
 lregSm_ENC<-summary(lreg_ENC)
-lstToSave_ENC<-list("data"=dataExp_ENC_List, "lregCoef"=lregSm_ENC$coefficients, "sd.prior"=r2);
+lstToSave_ENC<-list("data"=dataExp_ENC_List, "lregCoef"=lregSm_ENC$coefficients, "var.prior"=r2);
 save(lstToSave_ENC, file=paste("result_",k,".RData",sep=""));
 cat("Done!!\n")
 }
@@ -150,333 +165,50 @@ op<-par(mfrow=c(2,2))
 plot(lreg_EN)
 par(op)
 
-#================analysis=======
+#================analysis= negative control======
 ###start doing the summary statistics of the repeated runs
 #
 #loading the data
-repeats<-100
-setwd("H:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_NegativeCon");
-#setwd("~/Desktop/arppr/EqualVar_NegativeCon/")
-i<-1
-portions<-seq(0.001, 0.5, 0.001)
-stats_df<-data.frame("portions"=portions);
-for(i in c(1:repeats))
-{
-	cat("reading the ",i, "/", repeats," data sets.....\n")
-	load(paste("result_", i,".RData",sep=""))
-	cat("count the correct ones.....\n")
-	#depending on which data,
-	lstData<-lstToSave
-	rm(lstToSave)
-	
-	#try to know which one is nonZero as the true values
-	gammaTrue<-lstData$data$gamma
-	gammaTrueIndex<-which(gammaTrue[,2]!=0)
-	
-	#now need to sort the p-value of the 
-	#and pick top n genes to be the significant ones as the analysis results
-	#
-	lr_coe<-lstData$lregCoef
-	lr_coe_names<-rownames(lr_coe)
-	lr_coe_gamma_index<-which(grepl("gene\\d*:group2",lr_coe_names));
-	lr_coe_int<-lr_coe[lr_coe_gamma_index,]
-	lr_coe_int_names<-lr_coe_names[lr_coe_gamma_index];
+repeats<-10
+#setwd("E:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_NegativeCon");
+filePath<-"E:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_NegativeCon"
 
-	#sort the array according to the prob
-	lr_coe_int_sort_order<-order(lr_coe_int[,4]) #NOTE:the names is one more than its index, eg. 811 is gene812:group2
-	#lr_coe_int_sort<-lr_coe_int[lr_coe_int_sort_order,]
-	
-
-	#now we have everything, just need to collect statistics
-	p_correct<-portions;#initialize the vector
-	for(j in c(1:length(portions)))
-	{
-		#for each portion, we need to check what is percentage to be correct
-		numToPick<-floor(lstData$data$params[1]*portions[j])
-		#picking from the order array
-		genesToPick<-lr_coe_int_sort_order[c(1:numToPick)]+1
-
-		#now we got the genes, just need to check whether the genes so far are the TRUE ones
-		numOfCorrect<-sum(is.element(genesToPick, gammaTrueIndex));
-		p_correct[j]<-numOfCorrect/numToPick
-	}
-	stats_df[,paste("repeat_",i)]<-p_correct;
-}
-#statistics with the stats_df array
-mean_correct<-portions
-max_correct<-portions
-min_correct<-portions
-std_correct<-portions
-m_stats_df<-as.matrix(stats_df)
-for(k in c(1:length(portions)))
-{
-	mean_correct[k]<-mean(m_stats_df[k,c(-1)])
-	max_correct[k]<-max(m_stats_df[k,c(-1)])
-	min_correct[k]<-min(m_stats_df[k,c(-1)])
-	std_correct[k]<-sqrt(var(m_stats_df[k,c(-1)]))
-}
-
-stats_df[,"mean"]<-mean_correct
-stats_df[,"min"]<-min_correct
-stats_df[,"max"]<-max_correct
-stats_df[,"std"]<-std_correct
-
-plot(c(0.001,0.51),c(0.02, 1.1), type="n", main="true discovery rate for protein selection", 
-	xlab="portion of protein selected", ylab="portion of true discovery", log="")
-lines(stats_df[,1], stats_df[,"mean"], col=1, lty=1, lwd=2)
-lines(stats_df[,1], stats_df[,"min"], col="grey", lty=2, lwd=1)
-lines(stats_df[,1], stats_df[,"max"], col="grey", lty=2, lwd=1)
-lines(c(0.01, 0.01), c(0,1.2), col=2, lty=3)
-
-#show stats
-stats_df[c(1:30),c("portions", "mean", "min", "max", "std")]
+rtlist<-analyzeData(path=filePath,filename="result_", repeats=100, 
+					sample.size=5,
+					proportion.nonZero=0.02);
+					
 
 ########=================Isotype control data analysis
 #loading the data
-repeats<-100
-setwd("H:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_IsotypeCon");
+
+setwd("E:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_IsotypeCon");
 #setwd("~/Desktop/arppr/EqualVar_NegativeCon/")
-i<-1
-portions<-seq(0.001, 0.5, 0.001)
-stats_df<-data.frame("portions"=portions);
-for(i in c(1:repeats))
-{
-	cat("reading the ",i, "/", repeats," data sets.....\n")
-	load(paste("result_", i,".RData",sep=""))
-	cat("count the correct ones.....\n")
-	#depending on which data,
-	lstData<-lstToSave_EI
-	rm(lstToSave_EI)
-	
-	#try to know which one is nonZero as the true values
-	gammaTrue<-lstData$data$gamma
-	gammaTrueIndex<-which(gammaTrue[,2]!=0)
-	
-	#now need to sort the p-value of the 
-	#and pick top n genes to be the significant ones as the analysis results
-	#
-	lr_coe<-lstData$lregCoef
-	lr_coe_names<-rownames(lr_coe)
-	lr_coe_gamma_index<-which(grepl("gene\\d*:group2",lr_coe_names));
-	lr_coe_int<-lr_coe[lr_coe_gamma_index,]
-	lr_coe_int_names<-lr_coe_names[lr_coe_gamma_index];
+filePath<-"E:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_IsotypeCon"
 
-	#sort the array according to the prob
-	lr_coe_int_sort_order<-order(lr_coe_int[,4]) #NOTE:the names is one more than its index, eg. 811 is gene812:group2
-	#lr_coe_int_sort<-lr_coe_int[lr_coe_int_sort_order,]
-	
-
-	#now we have everything, just need to collect statistics
-	p_correct<-portions;#initialize the vector
-	for(j in c(1:length(portions)))
-	{
-		#for each portion, we need to check what is percentage to be correct
-		numToPick<-floor(lstData$data$params[1]*portions[j])
-		#picking from the order array
-		genesToPick<-lr_coe_int_sort_order[c(1:numToPick)]+1
-
-		#now we got the genes, just need to check whether the genes so far are the TRUE ones
-		numOfCorrect<-sum(is.element(genesToPick, gammaTrueIndex));
-		p_correct[j]<-numOfCorrect/numToPick
-	}
-	stats_df[,paste("repeat_",i)]<-p_correct;
-}
-#statistics with the stats_df array
-mean_correct<-portions
-max_correct<-portions
-min_correct<-portions
-std_correct<-portions
-m_stats_df<-as.matrix(stats_df)
-for(k in c(1:length(portions)))
-{
-	mean_correct[k]<-mean(m_stats_df[k,c(-1)])
-	max_correct[k]<-max(m_stats_df[k,c(-1)])
-	min_correct[k]<-min(m_stats_df[k,c(-1)])
-	std_correct[k]<-sqrt(var(m_stats_df[k,c(-1)]))
-}
-
-stats_df[,"mean"]<-mean_correct
-stats_df[,"min"]<-min_correct
-stats_df[,"max"]<-max_correct
-stats_df[,"std"]<-std_correct
-
-plot(c(0.001,0.51),c(0.02, 1.1), type="n", main="true discovery rate for protein selection", 
-	xlab="portion of protein selected", ylab="portion of true discovery", log="xy")
-lines(stats_df[,1], stats_df[,"mean"], col=1, lty=1, lwd=2)
-lines(stats_df[,1], stats_df[,"min"], col="grey", lty=2, lwd=1)
-lines(stats_df[,1], stats_df[,"max"], col="grey", lty=2, lwd=1)
-lines(c(0.01, 0.01), c(0.02,1.2), col=2, lty=3)
-
-#show stats
-stats_df[c(1:30),c("portions", "mean", "min", "max", "std")]
- 
+rtlist<-analyzeData(path=filePath,filename="result_", repeats=100, 
+					sample.size=5,
+					proportion.nonZero=0.02,
+					object.load="lstToSave_EI",
+					mode=1);
  
  #######====================No control++++++++++
 
 #loading the data
 repeats<-100
-setwd("H:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_UnControl");
+#setwd("E:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_UnControl");
 #setwd("~/Desktop/arppr/EqualVar_NegativeCon/")
-i<-1
-portions<-seq(0.001, 0.5, 0.001)
-stats_df<-data.frame("portions"=portions);
-for(i in c(1:repeats))
-{
-	cat("reading the ",i, "/", repeats," data sets.....\n")
-	load(paste("result_", i,".RData",sep=""))
-	cat("count the correct ones.....\n")
-	#depending on which data,
-	lstData<-lstToSave_ENC
-	rm(lstToSave_ENC)
-	
-	#try to know which one is nonZero as the true values
-	gammaTrue<-lstData$data$gamma
-	gammaTrueIndex<-which(gammaTrue[,2]!=0)
-	
-	#now need to sort the p-value of the 
-	#and pick top n genes to be the significant ones as the analysis results
-	#
-	lr_coe<-lstData$lregCoef
-	lr_coe_names<-rownames(lr_coe)
-	lr_coe_gamma_index<-which(grepl("gene\\d*:group2",lr_coe_names));
-	lr_coe_int<-lr_coe[lr_coe_gamma_index,]
-	lr_coe_int_names<-lr_coe_names[lr_coe_gamma_index];
 
-	#sort the array according to the prob
-	lr_coe_int_sort_order<-order(lr_coe_int[,4]) #NOTE:the names is one more than its index, eg. 811 is gene812:group2
-	#lr_coe_int_sort<-lr_coe_int[lr_coe_int_sort_order,]
-	
+filePath<-"E:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_UnControl"
 
-	#now we have everything, just need to collect statistics
-	p_correct<-portions;#initialize the vector
-	for(j in c(1:length(portions)))
-	{
-		#for each portion, we need to check what is percentage to be correct
-		numToPick<-floor(lstData$data$params[1]*portions[j])
-		#picking from the order array
-		genesToPick<-lr_coe_int_sort_order[c(1:numToPick)]+1
+rtlist<-analyzeData(path=filePath,filename="result_", repeats=100, 
+					sample.size=5,
+					proportion.nonZero=0.02,
+					object.load="lstToSave_ENC", 
+					mode=1);
+					
+rtlist<-analyzeData(path=filePath,filename="result_", repeats=100, 
+					sample.size=5,
+					proportion.nonZero=0.02,
+					object.load="lstToSave_ENC", 
+					mode=2);
 
-		#now we got the genes, just need to check whether the genes so far are the TRUE ones
-		numOfCorrect<-sum(is.element(genesToPick, gammaTrueIndex));
-		p_correct[j]<-numOfCorrect/numToPick
-	}
-	stats_df[,paste("repeat_",i)]<-p_correct;
-}
-#statistics with the stats_df array
-mean_correct<-portions
-max_correct<-portions
-min_correct<-portions
-std_correct<-portions
-m_stats_df<-as.matrix(stats_df)
-for(k in c(1:length(portions)))
-{
-	mean_correct[k]<-mean(m_stats_df[k,c(-1)])
-	max_correct[k]<-max(m_stats_df[k,c(-1)])
-	min_correct[k]<-min(m_stats_df[k,c(-1)])
-	std_correct[k]<-sqrt(var(m_stats_df[k,c(-1)]))
-}
-
-stats_df[,"mean"]<-mean_correct
-stats_df[,"min"]<-min_correct
-stats_df[,"max"]<-max_correct
-stats_df[,"std"]<-std_correct
-
-plot(c(0.001,0.51),c(0.02, 1.1), type="n", main="true discovery rate for protein selection", 
-	xlab="portion of protein selected", ylab="portion of true discovery", log="xy")
-lines(stats_df[,1], stats_df[,"mean"], col=1, lty=1, lwd=2)
-lines(stats_df[,1], stats_df[,"min"], col="grey", lty=2, lwd=1)
-lines(stats_df[,1], stats_df[,"max"], col="grey", lty=2, lwd=1)
-lines(c(0.01, 0.01), c(0.02,1.2), col=2, lty=3)
-
-#show stats
-stats_df[c(1:30),c("portions", "mean", "min", "max", "std")]
- 
- 
- ####------------------------------------------------------------------------------------
- #####the following part is also for the ---no control---
- ###this is special for no control cases, because in this case
- ###the differential ones could possibly from both groups
- ###if we only count one group, this will lower the true positive rate
- ###here we need to check both groups for the true positive ones
- 
- #loading the data
-repeats<-100
-setwd("H:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\EqualVar_UnControl");
-#setwd("~/Desktop/arppr/EqualVar_NegativeCon/")
-i<-1
-portions<-seq(0.001, 0.5, 0.001)
-stats_df<-data.frame("portions"=portions);
-for(i in c(1:repeats))
-{
-	cat("reading the ",i, "/", repeats," data sets.....\n")
-	load(paste("result_", i,".RData",sep=""))
-	cat("count the correct ones.....\n")
-	#depending on which data,
-	lstData<-lstToSave_ENC
-	rm(lstToSave_ENC)
-	
-	#try to know which one is nonZero as the true values
-	gammaTrue<-lstData$data$gamma
-	gammaTrueIndex2<-which(gammaTrue[,2]!=0)
-	gammaTrueIndex1<-which(gammaTrue[,1]!=0)
-	
-	
-	#now need to sort the p-value of the 
-	#and pick top n genes to be the significant ones as the analysis results
-	#
-	lr_coe<-lstData$lregCoef
-	lr_coe_names<-rownames(lr_coe)
-	lr_coe_gamma_index<-which(grepl("gene\\d*:group2",lr_coe_names));
-	lr_coe_int<-lr_coe[lr_coe_gamma_index,] #this is the table holding the datas for all the interaction coefficients
-	lr_coe_int_names<-lr_coe_names[lr_coe_gamma_index];
-
-	#sort the array according to the probability, which is at the positive 4 column
-	lr_coe_int_sort_order<-order(lr_coe_int[,4]) #NOTE:the names is one more than its index, eg. 811 is gene812:group2
-	#lr_coe_int_sort<-lr_coe_int[lr_coe_int_sort_order,]
-	
-
-	#now we have everything, just need to collect statistics
-	p_correct<-portions;#initialize the vector
-	for(j in c(1:length(portions)))
-	{
-		#for each portion, we need to check what is percentage to be correct
-		numToPick<-floor(lstData$data$params[1]*portions[j]*2)  #multiply by 2 here, because we are accounting for the facts that for bother treatment group
-																#we are select top portions of genes, which means double the number of selected genes.
-		#picking from the order array
-		genesToPick<-lr_coe_int_sort_order[c(1:numToPick)]+1
-
-		#now we got the genes, just need to check whether the genes so far are the TRUE ones
-		numOfCorrect1<-sum(is.element(genesToPick, gammaTrueIndex1));
-		numOfCorrect2<-sum(is.element(genesToPick, gammaTrueIndex2));
-		p_correct[j]<-(numOfCorrect1+numOfCorrect2)/numToPick
-	}
-	stats_df[,paste("repeat_",i)]<-p_correct;
-}
-#statistics with the stats_df array
-mean_correct<-portions
-max_correct<-portions
-min_correct<-portions
-std_correct<-portions
-m_stats_df<-as.matrix(stats_df)
-for(k in c(1:length(portions)))
-{
-	mean_correct[k]<-mean(m_stats_df[k,c(-1)])
-	max_correct[k]<-max(m_stats_df[k,c(-1)])
-	min_correct[k]<-min(m_stats_df[k,c(-1)])
-	std_correct[k]<-sqrt(var(m_stats_df[k,c(-1)]))
-}
-
-stats_df[,"mean"]<-mean_correct
-stats_df[,"min"]<-min_correct
-stats_df[,"max"]<-max_correct
-stats_df[,"std"]<-std_correct
-
-plot(c(0.001,0.51),c(0.02, 1.1), type="n", main="true discovery rate for protein selection", 
-	xlab="portion of protein selected", ylab="portion of true discovery", log="xy")
-lines(stats_df[,1], stats_df[,"mean"], col=1, lty=1, lwd=2)
-lines(stats_df[,1], stats_df[,"min"], col="grey", lty=2, lwd=1)
-lines(stats_df[,1], stats_df[,"max"], col="grey", lty=2, lwd=1)
-lines(c(0.01, 0.01), c(0.02,1.2), col=2, lty=3)
-
-#show stats
-stats_df[c(1:30),c("portions", "mean", "min", "max", "std")]

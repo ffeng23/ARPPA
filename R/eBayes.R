@@ -19,7 +19,7 @@
 #' 		it is possible to have missing values, where df's for 
 #'		different groups vary
 #'
-#'@return list with d0 (prior df) and s0 (prior standard deviation)
+#'@return list with d0 (prior df) and s02 (prior variance)
 
 #'@examples
 #' 
@@ -37,7 +37,7 @@
 
 #' #priors for variance distribution
 #' d0<-5
-#' s0<-2
+#' s02<-2
 
 #' #call it
 #' set.seed(2004);
@@ -82,7 +82,7 @@ sampleVariancePrior<-function (x,df)
 	}
 	s02<-exp(eg_bar+digamma(d0_num/2)-log(d0_num/2))
 	#inf how ??
-	prior<-list(d0=d0, s0=sqrt(s02))
+	prior<-list(d0=d0, s02=s02)
 	
 } 
 #the function to calculate the sample variance based on data
@@ -268,7 +268,7 @@ sampleSizes<-function(x,group,sample.size)
 	missY_dt<-data.frame(1-missY)
 	missY_dt$group<-groupInfo
 	dfY<-aggregate(missY_dt,by=list(missY_dt$group),FUN=sum, na.rm=TRUE)
-	df<-dfY[,c(-1,-1*(length(x[,1])+2))]-1 #minus one since we are one df is used to calculated mean
+	df<-dfY[,c(-1,-1*(length(x[,1])+2))] #-1 #<-==here we don't subtract one, since this is the sampleSize, but not the df (minus one since we are one df is used to calculated mean)
 	#s2<-as.vector(as.matrix(varK))
 
 	#df<-as.vector(as.matrix(dfK))
@@ -289,17 +289,17 @@ sampleSizes<-function(x,group,sample.size)
 #'	d0 and s0^2 are the parameters of the prior scaled chi-square distribution
 #'	d and s^2 are the observed degree freedom and sample variance.
 #'
-#'@param d0 numeric the degree of freedom of the prior distribution
-#'@param s0 numeric the variance of the prior distribution
-#'@param d numeric or vector the degree of freedom of sample data.
+#'@param d numeric the degree of freedom of the prior distribution
+#'@param s2 numeric the variance of the prior distribution
+#'@param d0 numeric or vector the degree of freedom of sample data.
 #'	It should be one less than the number of data points 
-#'@param s numeric the sample variance based on the data
+#'@param s02 numeric the sample variance based on the data
 #'@return a vector or a numeric as the posterior mean of the sample variance 
 #'@seealso sampleVariance sampleVariancePrior rScaledChisq
 #'@export
-sampleVariancePosterior<-function(s2, d, d0, s02 )
+sampleVariancePosterior<-function(d, s2, d0, s02 )
 {
-	x<-(s*d+d0*s0)/(d0+d)
+	x<-(s2*d+d0*s02)/(d0+d)
 	return(x)
 }
 
@@ -362,25 +362,37 @@ transformData<-function(x,group, sample.size)
 	#get the sample mean and variance
 	sMean<-sampleMean(x, group, sample.size)
 	sVar<-sampleVariance(x,group,sample.size)
-	sdf<-sampleSizes(dataExp,nTreatment, sampleSize)
+	sdf<-sampleSizes(x,nTreatment, sampleSize)-1
 	#get the sample variance prior by assuming a scale-chisquare
 	s2<-as.vector(as.matrix(sVar))
 	df<-as.vector(as.matrix(sdf))
 	
 	r2<-sampleVariancePrior(s2,df)
-	s0<-r2[[1]]
-	df0<-r2[[2]]
+	s02<-r2[[2]]
+	df0<-r2[[1]]
+	
+	#calculate the posterior variance
+	var_pos<-sampleVariancePosterior(sdf,sVar,  df0, s02 )
+	
+	#prepare the mean for ".matrix" operation
+	#mean_pos<-x
+	
 	#now do the transformation
 	running_index<-0
 	for(i in c(1:group))
 	{
-		
+		#cat("i:",i, "\n")
 		for(j in c(1:sample.size[i]))
 		{
-				x[,running_index+j]<-(x[,running_index+j]-sMean[i])/sqrt(sVar)+sMean[i]
+		
+			#cat("\tj:",j, "\n")
+			#mean_pos[,running_index]<-sMean[,i]
+				x[,running_index+j]<-(x[,running_index+j]-sMean[,i])/sqrt(var_pos[,i])+sMean[,i]
 		}
 		running_index<-running_index+sample.size[i];
 	}
+	#now do the transformation with ".matrix" operation
+	#x<-(x-sMean)/sqrt(var_pos)+sMean;
 	return(x)
 }
 
