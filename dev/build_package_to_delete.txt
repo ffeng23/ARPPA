@@ -21,19 +21,19 @@ devtools::setup(path=".")
 
 
 #call roxygen2 to process the helper pages from the roxygen comments
-setwd( "h:/feng/LAB/hg/proteinArray_Masa/ARPPA")
+setwd( "E:/feng/LAB/hg/proteinArray_Masa/ARPPA")
 devtools::document()
 
 #remove
 remove.packages("ARPPA")
 
 #feng's directory to call to install
-setwd( "h:/feng/LAB/hg/proteinArray_Masa")
+setwd( "E:/feng/LAB/hg/proteinArray_Masa")
 #install from local directory, but this is different from install.packages
 devtools::install("ARPPA")
 
 #install from local using install.packages utility
-setwd( "h:/feng/LAB/hg/proteinArray_Masa")
+setwd( "E:/feng/LAB/hg/proteinArray_Masa")
 install.packages(c("ARPPA"),repos=NULL, type="source")
 
 #load the package

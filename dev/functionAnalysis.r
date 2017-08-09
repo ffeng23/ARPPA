@@ -186,9 +186,9 @@ stats_df[,"mean"]<-mean_correct
 stats_df[,"min"]<-min_correct
 stats_df[,"max"]<-max_correct
 stats_df[,"std"]<-std_correct
-op<-par(mfrow=c(2,1),
-	pty="s" #"s" for square, "m" for maximal plot area
-	)
+#op<-par(mfrow=c(2,1),
+#	pty="s" #"s" for square, "m" for maximal plot area
+#	)
 plot(c(0.001,0.51),c(0.02, 1.1), type="n", main="true discovery rate for protein selection", 
 	xlab="portion of protein selected", ylab="portion of true discovery", log="x")
 lines(stats_df[,1], stats_df[,"mean"], col=1, lty=1, lwd=2)
@@ -210,11 +210,11 @@ for(k in c(1:length(portions)))
 }
 
 
-plot(c(0,1), c(0,1),type="n", main="ROC", ylab="True Positive Rate", xlab="False Positive Rate")
-for(ii in c(1:repeats))
-{
-	lines( stats_qval_fpr[,ii+1],stats_qval_tpr[,ii+1],col="red", lty="dotted")
-}
+plot(c(0,1), c(0,1),type="n", main="C: No Control", ylab="True Positive Rate", xlab="False Positive Rate")
+#for(ii in c(1:repeats))
+#{
+#	lines( stats_qval_fpr[,ii+1],stats_qval_tpr[,ii+1],col="red", lty="dotted")
+#}
 lines(mean_fpr,mean_tpr, col="red",lty=1,lwd=2)
 #legend(0.7,0.2,c("mean ROC"),col=c("red"), lty=c(2),lwd=c(2))
 #text(0.7,0.3,labels=paste("AUC:",mean(roc.auc)))
@@ -230,15 +230,15 @@ for(k in c(1:length(portions)))
 
 
 #plot(c(0,1), c(0,1),type="n", main="ROC", ylab="True Positive Rate", xlab="False Positive Rate")
-for(ii in c(1:repeats))
-{
-	lines( stats_qval_fpr_ordT[,ii+1],stats_qval_tpr_ordT[,ii+1],col="light green", lty="dotted")
-}
+#for(ii in c(1:repeats))
+#{
+#	lines( stats_qval_fpr_ordT[,ii+1],stats_qval_tpr_ordT[,ii+1],col="light green", lty="dotted")
+#}
 lines(mean_fpr_ordT,mean_tpr_ordT, col="green",lty=1,lwd=2)
 legend(0.7,0.2,c("model", "ordinary t"),col=c("red", "green"), lty=c(2, 2),lwd=c(2,2))
 text(0.7,0.25,labels=paste("AUC ordinary t:",mean(roc_ordT.auc)))
 text(0.7,0.35,labels=paste("AUC model:",mean(roc.auc)))
-par(op);
+#par(op);
 
 ####starting here, prepare the output
 	

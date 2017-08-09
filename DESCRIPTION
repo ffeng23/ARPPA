@@ -19,5 +19,7 @@ Collate:
     'ARPPA.R'
     'data.R'
     'eBayes.R'
+    'residualFunc.R'
+    'gainAdjust.R'
     'stats.R'
 RoxygenNote: 5.0.1

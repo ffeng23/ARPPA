@@ -48,7 +48,7 @@ a<-1
 d<-100
 xmid<-500
 scal<- 50
-xa<-seq(-500,2000,by=50)
+xa<-seq(0,1000,by=10)
 
 ya<-a+(d-a)/(1+exp((xmid-xa)/scal))^g#+rnorm(length(x),0, 0.1)
 
