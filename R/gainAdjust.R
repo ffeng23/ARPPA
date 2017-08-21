@@ -97,9 +97,11 @@ d<-(pmt_saturated_reading-5);
 ### y must be either dataframe or matrix in a formate of genes by pmts
 ### x could be a vector indicating one set of pmts and
 ###			or it could be matrix or dataframe has same dimension of y
-###
+### we also do estimation of variace
 #'@export
-gainAdjust.prepareInput<-function(y, x, pos=1
+gainAdjust.prepareInput<-function(y, x, 
+		#pos=1, 
+		var.log=F
 		)
 	{
 		#need to make sure ncol of y equals to length(x)
@@ -110,7 +112,7 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 			{
 				stop("the input y and x don't have correct format/length, please check!")
 			}
-			return(list("y"=y,"x"=x))
+			return(list("y"=y,"x"=x, "var"=1))
 		}
 		
 		if(class(y)!="data.frame" && class(y)!="matrix")
@@ -155,28 +157,34 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 		
 		#now doing y
 		y_t<-rep(0,dim(y)[1]*dim(y)[2])
-			
-		for(i in c(1:dim(y)[1]))
+		var_t<-rep(0,dim(y)[1]*dim(y)[2]/2)	
+		for(i in c(1:(dim(y)[1]/2)))
 		{
-			y_t[c(1:dim(y)[2])+(i-1)*dim(y)[2]]<-y[i,]
-			
+			y_t[c(1:dim(y)[2])+((i)*2-1-1)*dim(y)[2]]<-y[i*2-1,]
+			y_t[c(1:dim(y)[2])+((i)*2-1)*dim(y)[2]]<-y[i*2,]
+			if(var.log)
+			{
+				var_t[c(1:dim(y)[2])+((i-1))*dim(y)[2]]<-(log(y[i*2-1,]/y[i*2,]))^2
+			}else {
+				var_t[c(1:dim(y)[2])+((i-1))*dim(y)[2]]<-(y[i*2-1,]-y[i*2,])*(y[i*2-1,]-y[i*2,])
+			}
 		}
 		
 		##change the parameters
-		if(pos!=1)
-		{
-			y1<-y_t[c(1:dim(y)[2])]
-			y_t[c(1:dim(y)[2])]<-y_t[(pos-1)*dim(y)[2]+c(1:dim(y)[2])]
-			y_t[(pos-1)*dim(y)[2]+c(1:dim(y)[2])]<-y1
-			# have to do the same anything on x, if x is not a vector
-			if(class(x)!="numeric")
-			{
-				x1<-x_t[c(1:dim(x)[2])]
-				x_t[c(1:dim(x)[2])]<-x_t[(pos-1)*dim(x)[2]+c(1:dim(x)[2])]
-				x_t[(pos-1)*dim(x)[2]+c(1:dim(x)[2])]<-x1
-			}
-		}
-		return (list("y"=y_t, "x"=x_t))
+		#if(pos!=1)
+		#{
+		#	y1<-y_t[c(1:dim(y)[2])]
+		#	y_t[c(1:dim(y)[2])]<-y_t[(pos-1)*dim(y)[2]+c(1:dim(y)[2])]
+		#	y_t[(pos-1)*dim(y)[2]+c(1:dim(y)[2])]<-y1
+		#	# have to do the same anything on x, if x is not a vector
+		#	if(class(x)!="numeric")
+		#	{
+		#		x1<-x_t[c(1:dim(x)[2])]
+		#		x_t[c(1:dim(x)[2])]<-x_t[(pos-1)*dim(x)[2]+c(1:dim(x)[2])]
+		#		x_t[(pos-1)*dim(x)[2]+c(1:dim(x)[2])]<-x1
+		#	}
+		#}
+		return (list("y"=y_t, "x"=x_t, "var"=var_t))
 	}
 	
 	#------this is the simpliest way to prepare the inits for shifting
@@ -459,7 +467,7 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 		xmin<-log(x[1])+min(LMfit$par[c(k_index:length(LMfit$par))])
 		xmax<-log(x[length(x)])+max(LMfit$par[c(k_index:length(LMfit$par))])
 		
-		plot(c(xmin,xmax+0.3), c(log(a*0.95),log(d)+0.2), bg = "black", cex = 0.5, main="data", type="n")
+		plot(c(xmin,xmax+0.3), c(min(log(a*0.95),min(y)),log(d)+0.2), bg = "black", cex = 0.5, main="data", type="n")
 		#plot(c(xmin,xmax+0.3), c((0.1),(66535)+5000), bg = "black", cex = 0.5, main="data", type="n")
 		#points(log(x), log(y[1,]), col="grey", lty=2) 
 		params<-LMfit$par[c(k_index:length(LMfit$par))]
@@ -658,7 +666,7 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 	}
 	
 	#'@export
-	fitShifts5plSingle<-function(ydata, x, par.5pl, data.aggregated=F)
+	fitShifts5plSingle<-function(ydata, x, par.5pl, data.aggregated=F, debug=F)
 	{
 		if(missing(ydata))
 		{
@@ -672,6 +680,10 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 		{
 			stop("please specify the fitting parameters!")
 		}
+		#if(length(var)!=1&&length(var)!=dim(ydata)[1])
+		#{
+		#	stop("the var is not set up correctly")
+		#}
 		initsLM<-gainAdjust.prepareInitsLM(ydata,x, aggregated=data.aggregated)
 			#parStart<-c(6,0.1,0.13,-0.2,-0.5,-0.55, -0.5,1)
 				
@@ -690,26 +702,52 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 		#{
 			fitShift<-list();
 			fitShift$par<-initsLM$inits;#[-initsLM$ref.index]; #initialize the output
+			#--->xsim<-seq(4,7,by=0.01)
+			#--->plot(exp(xsim), f5pl(c(a,d, gainAdjust.fit$par[1:3]),xsim),col=2, lwd=2, type="l", log="xy", lty=2)
+			cat("Fitting the shifting parameters......\n")
+			nprint<-0;
+			if(debug)
+			{
+				nprint<-1;
+			}
 			for(i in 1:length(initsLM$inits))
 			{
-				cat(i,"/", length(initsLM$inits),"...\n")
+				if(debug){
+					cat(i,"/", length(initsLM$inits),"...\n")
+				}
 				if(i==initsLM$ref.index)
 				{
 					fitShift$par[i]<-0
 					next;
 				}
-				
+				xlen<-length(x)
+				#yvar<-(log(ydata[i*2-1,]/ydata[i*2,]))^2
+				#idx.zero<-which(yvar==0)
+				#if(length(idx.zero)>0)
+				#{
+				#	yvar[idx.zero]<-min(yvar[-idx.zero]) ##to get rid of zero variance.
+				#}
+				#yvar<-1
 				#do fitting individually
+				
 				gainAdjust.fitS<-nls.lm(par=fitShift$par[i], fn=gainAdjust.fnResShiftSingle,
 					#y=log(yinput.aligned), 
 					y=c(ydata[i*2-1,], ydata[i*2,]), 
-					x=log(x), #xlen=9,aggregated=aggregated,
+					x=log(x), #xlen=9,
+					aggregated=data.aggregated,
 					#ylog=ylog, model.weight="power", #in here, this fnResShift doesn't take any model, it hardcodes using log transform
 					#order=1,
 					a=par.5pl[1],d=par.5pl[2], 
-					xmid=par.5pl[3],scal=par.5pl[4],g=par.5pl[5],
+					xmid=par.5pl[3],scal=par.5pl[4],g=par.5pl[5], mvar=1,#yvar,
 					#shift.index=initsLM$ref.index,
-					control = nls.lm.control(nprint=1, maxit=100))
+					control = nls.lm.control(nprint=nprint, maxit=100))
+					
+					 #
+				if(debug){
+					lines(exp(log(x)+gainAdjust.fitS$par[1]),ydata[i*2,],col=i)
+					lines(exp(log(x)+gainAdjust.fitS$par[1]),ydata[i*2-1,],col=i)
+				}
+
 				fitShift$par[i]<-gainAdjust.fitS$par[1]
 			}#end of for loop
 		#}
@@ -754,7 +792,7 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 	#'@export
 	gainAdjust.fit5plArray<-function(y, x, data.ylog=F, data.aggregated=F,
 		fit.mode="control",
-		fit.aggregated=F, aggregated.mode="arithmatic", 
+		fit.aggregated=F, aggregated.mode="geometric", 
 		weight.mode, order=1,
 		block.size=12,a=1.1, d=65535,threshold=30,
 		PMT.gain=NULL,
@@ -875,16 +913,16 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 				model.weight="uniform", order=1, control = nls.lm.control(nprint=1,maxiter=50)
 				)
 			if(debug){	
-				sink("debug.txt", append=T)
+				#sink("debug.txt", append=T)
 				cat("summary of block", j, ":\n")
 				summary(gainAdjust.fit)
-				sink();
+				#sink();
 			
 			#gainAdjust.plot(gainAdjust.fit,log(y), x,ylog , ref.index=initsLM$ref.index)
 			#gainAdjust.plot(gainAdjust.fit,y, x,ylog)
 			gainAdjust.plot(gainAdjust.fit,ydata5PL, x, ylog=data.ylog , 
-								ref.index=initsLM$ref.index,a=a, aggregated=data.aggregated, 
-								filename=paste("fit1_blk_",j,".jpg",sep="")
+								ref.index=initsLM$ref.index,a=a, aggregated=data.aggregated
+								#,filename=paste("fit1_blk_",j,".jpg",sep="")
 							)
 			#plot 
 			x.aligned<-gainAdjust.alignData(gainAdjust.fit,x, model="fix.both", ref.index=initsLM$ref.index)##<---for 4Pl, 
@@ -900,7 +938,7 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 			
 			lines(exp(xsim), (f5pl(c(a,d, gainAdjust.fit$par[1:3]),xsim)),lty=1,col=3,lwd=2)
 			dev.off()
-		}
+			}
 		#done for first run
 			
 		#now do second fit, only shift data
@@ -915,14 +953,14 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 			initsLM<-gainAdjust.prepareInitsLM(ydata,x, aggregated=data.aggregated)
 			#parStart<-c(6,0.1,0.13,-0.2,-0.5,-0.55, -0.5,1)
 				
-			fitShift<-fitShifts5plSingle(ydata,x, c(a,d,gainAdjust.fit$par[1:3]), data.aggregated);
+			fitShift<-fitShifts5plSingle(ydata,x, c(a,d,gainAdjust.fit$par[1:3]), data.aggregated, debug);
 		#}
 			
 			if(debug){
 			gainAdjust.plot(fitShift,ydata, x,ylog=data.ylog , ref.index=initsLM$ref.index,
 				model="fix.all",aggregated=data.aggregated,
 				a=a, d=d, xmid=gainAdjust.fit$par[1], scal=gainAdjust.fit$par[2], g=gainAdjust.fit$par[3]
-				,filename=paste("fit2_blk_",j,".jpg", sep="")
+				#,filename=paste("fit2_blk_",j,".jpg", sep="")
 				)#a=1.2440093153044
 			
 				
@@ -940,12 +978,12 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 			
 			lines(exp(xsim), (f5pl(c(a,d, gainAdjust.fit$par[1:3]),xsim)),lty=1,col=3,lwd=2)
 			dev.off();
-		}			
+			}			
 		#done for second try
 			
 		#now do the last fitting for parameters, mainly for parameter a
 		#-------->now fit 4 parameters on aligned data again to allow a to vary
-			ydata_ag<-gainAdjust.aggregate(ydata, mode="geometric")
+			ydata_ag<-gainAdjust.aggregate(ydata, mode=aggregated.mode)
 			aggregated_3rd<-T
 			x.aligned<-gainAdjust.alignData(fitShift,x, aggregated=T, model="fix.all", ref.index=initsLM$ref.index)##<---for 4Pl, fixing highest end only
 
@@ -969,22 +1007,23 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 				gainAdjust.fitFinalP$par[1:4]<-c(a, gainAdjust.fit$par[1:3])
 			}
 			if(debug){
-			gainAdjust.plot(fitShift,ydata, x,ylog=data.ylog , ref.index=initsLM$ref.index,
-					model="fix.all",
-					a=gainAdjust.fitFinalP$par[1], d=d, 
-					xmid=gainAdjust.fitFinalP$par[2], scal=gainAdjust.fitFinalP$par[3], g=gainAdjust.fitFinalP$par[4],
-					filename=paste("fit3_blk_",j,".jpg")
-			)#a=1.2440093153044
-			
-			jpeg(filename=paste("fit3_dot_blk_",j,".jpeg",sep=""))
-			plot((xinput.aligned), (yinput.aligned), type="p", main="5-p logistic fitting of intensity vs. PMT gain",
-				xlab="PMT gain (log)",ylab="intensity (log)",log="xy"
-				)
-			#plot(log(xinput.aligned), (yinput.aligned), type="p")
-			xsim<-seq(4,7,by=0.01)
-			
-			lines(exp(xsim), (f5pl(c(gainAdjust.fitFinalP$par[1],d, gainAdjust.fitFinalP$par[2:4]),xsim)),lty=1,col=3,lwd=2)
-			dev.off();
+				gainAdjust.plot(fitShift,ydata_ag, x,ylog=data.ylog , ref.index=initsLM$ref.index,
+						model="fix.all",
+						a=gainAdjust.fitFinalP$par[1], d=d, 
+						xmid=gainAdjust.fitFinalP$par[2], scal=gainAdjust.fitFinalP$par[3], g=gainAdjust.fitFinalP$par[4],
+						aggregated=T
+						#,filename=paste("fit3_blk_",j,".jpg")
+				)#a=1.2440093153044
+				
+				jpeg(filename=paste("fit3_dot_blk_",j,".jpeg",sep=""))
+				plot((xinput.aligned), (yinput.aligned), type="p", main="5-p logistic fitting of intensity vs. PMT gain",
+					xlab="PMT gain (log)",ylab="intensity (log)",log="xy"
+					)
+				#plot(log(xinput.aligned), (yinput.aligned), type="p")
+				xsim<-seq(4,7,by=0.01)
+				
+				lines(exp(xsim), (f5pl(c(gainAdjust.fitFinalP$par[1],d, gainAdjust.fitFinalP$par[2:4]),xsim)),lty=1,col=3,lwd=2)
+				dev.off();
 			}
 			cat("\tDONE!\n");
 			#shift<-
@@ -1007,14 +1046,14 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 			if(!missing(PMT.gain)&&!is.null(PMT.gain)){
 				temp_gain<-PMT.gain$C[idx.prC]
 			}
-			cat("1\n")
-			ydataC.adj<-adjust(ydata=ydata,x=x,par.5pl=c(gainAdjust.fitFinalP$par[1],d,gainAdjust.fitFinalP$par[2:4]),fitShift=fitShift,PMT.gain=temp_gain, F);
-			cat("2\n")
+			#cat("1\n")
+			ydataC.adj<-adjust.Matrix(ydata=ydata,x=x,par.5pl=c(gainAdjust.fitFinalP$par[1],d,gainAdjust.fitFinalP$par[2:4]),fitShift=fitShift,PMT.gain=temp_gain, F);
+			#cat("2\n")
 			fr$C[idx.prC]<-ydataC.adj$E;
 			fr$C.adj[idx.prC]<-ydataC.adj$E.adj;
 			fr$C.gain[idx.prC]<-ydataC.adj$gain;
 			
-			#first do fitting for shifts for target expression only
+			#Now do fitting for shifts for target expression only
 			idx.prE<-which(is.element(y$gene[,"Block"],c(bg:ed)))
 			ydata<-(y$E[idx.prE,])
 			initsLM<-gainAdjust.prepareInitsLM(ydata,x, aggregated=data.aggregated)
@@ -1024,7 +1063,7 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 			if(!missing(PMT.gain)&&!is.null(PMT.gain)){
 				temp_gain<-PMT.gain$E[idx.prE]
 			}
-			ydataE<-adjust(ydata=ydata,x=x,par.5pl=c(gainAdjust.fitFinalP$par[1],d,gainAdjust.fitFinalP$par[2:4]),fitShift=fitShift,PMT.gain=temp_gain,F);
+			ydataE<-adjust.Matrix(ydata=ydata,x=x,par.5pl=c(gainAdjust.fitFinalP$par[1],d,gainAdjust.fitFinalP$par[2:4]),fitShift=fitShift,PMT.gain=temp_gain,F);
 			fr$E[idx.prE]<-ydataE$E;
 			fr$E.adj[idx.prE]<-ydataE$E.adj;
 			fr$E.gain[idx.prE]<-ydataE$gain;
@@ -1036,9 +1075,11 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 	}#end of the function
 	
 	#this is the function determine the
-	#fitShift contains all the shift for all data points, including the one initsLM$ref.index
+	#fitShift including all the shifts for all data points for each individual Array data E or C
+	#	This function includes the one with index of initsLM$ref.index.
+	#
 	#'@export
-	adjust<-function(ydata, x, par.5pl,  fitShift, PMT.gain, data.aggregated=F )
+	adjust.Matrix<-function(ydata, x, par.5pl,  fitShift, PMT.gain, data.aggregated=F )
 	{
 		if(!data.aggregated)
 		{
@@ -1189,3 +1230,89 @@ gainAdjust.prepareInput<-function(y, x, pos=1
 			mtx
 		}
 	}
+	
+#this is the outermost driving function to call the functions to do the fitting and adjustment
+#'@export
+PMT.adjust<-function(data, #raw date after reading the GPR files
+			x, #vector holding the PMT gains for reading the chips, the arrangement of data in PMT reading is identical to the element order in x.
+			data.ylog=F, data.aggregated=F,#description of data, usually, don't need to change, for advance user only
+			fit.mode="control", ##fit the 5pl with control data only, to speed up 
+			fit.aggregated=F, #fit the 5pl with aggregated data, for advanced data
+			aggregated.mode="geometric", #controlling the way to do aggregation, geometric is preferred
+			block.size=12, #size of blocks to do fitting, the more the better??. but too slow, 12 is appropriate
+			a=1.1, d=65535, #change only when you know what you do.
+			debug=T  #showing the debugging information
+			)
+{
+	#check data
+	if(missing(data)||missing(x))
+	{
+		stop("please specify the data/x.")
+	}
+	if(class(data)!="EListRaw")
+	{
+		stop("the data object is not in correct format!!")
+	}
+	if(class(x)!="numeric")
+	{
+		stop("the x is not in correct format!!")
+	}
+	if(floor(dim(data$E)[2]/length(x))*length(x)!=dim(data$E)[2])
+	{
+		stop("data and x are not correctly set up, please check")
+	}
+	#now start picking the data 
+	blkNum<-max(data$gene[,"Block"])
+	arrys<-unique(data$target[,"Array"])
+	arryNm<-length(arrys)
+
+	#i<-j<-1
+	#cat("block ", i,"/",blkNum, "...\n")
+	y<-list("C"=NULL, "E"=NULL, "cgene"=NULL, "gene"=NULL)
+	yAdj<-list("E"=matrix(0,ncol=arryNm, nrow=dim(data$E)[1],byrow=T), 
+				"C"=matrix(0,ncol=arryNm, nrow=dim(data$C)[1],byrow=T), 
+				"E.adj"=matrix(0,ncol=arryNm, nrow=dim(data$E)[1],byrow=T), 
+				"C.adj"=matrix(0,ncol=arryNm, nrow=dim(data$C)[1],byrow=T),
+				"E.PMT"=NULL, "C.PMT"=NULL
+			)
+
+	PMT.gain<-NULL;
+	for( j in 1:arryNm)
+	{
+		#now take out the array data from the object
+		aNm<-arrys[j]
+	
+		idx.aNm<-which(data$target[,"Array"]==aNm)
+		#now we get the index of the one array j, now need to do fitting by block
+		
+		#now get idx, need to get the data into matrix
+		
+		y$C<-object$C[,idx.aNm] ; #rbind(object$E[idx.prE, idx.aNm], object$C[idx.prC,idx.aNm])
+		y$E<-object$E[,idx.aNm];
+		y$cgene<-object$cgene;
+		y$gene<-object$gene;
+		
+		#if(j==1)
+		#{
+		#	
+		#}
+		rs<-gainAdjust.fit5plArray(y, x, data.ylog=data.ylog, data.aggregated=data.aggregated,
+		fit.mode=fit.mode,
+		fit.aggregated=fit.aggregated, aggregated.mode=aggregated.mode, order=1,
+		block.size=block.size,a=a, d=d,threshold=60,
+		PMT.gain=PMT.gain,
+		debug=debug
+		)
+		#need to get PMT.gain using the first one as reference
+		PMT.gain<-list("E"=rs$E.gain, "C"=rs$C.gain);
+		
+		#at end of each run, need to add the result to the output list
+		yAdj$E[,j]<-rs$E
+		yAdj$C[,j]<-rs$C
+		yAdj$E.adj[,j]<-rs$E.adj
+		yAdj$C.adj[,j]<-rs$C.adj
+	}
+	yAdj$E.PMT<-PMT.gain$E
+	yAdj$C.PMT<-PMT.gain$C
+	yAdj;
+}

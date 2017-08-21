@@ -569,6 +569,28 @@ gainAdjust.fnResShift<-function( pars, #parameters
 #aggregate
 ##'@export
 ##
+
+#'@export
+disaggregateVec<-function(m, xlen)
+{
+	if(missing(m)||missing(xlen))
+	{
+		stop("missing input m/xlen!!")
+	}
+	if(floor(length(m)/xlen)*xlen!=length(m))
+	{
+		stop("the length of m is not of xlen fold, please check")
+	}
+	m.out<-rep(0, 2*length(m))
+	n.xlen<-length(m)/xlen
+	for(i in 1:n.xlen)
+	{
+		m.out[c(1:xlen)+(i*2-2)*xlen]<-m[c(1:xlen)+(i-1)*xlen]
+		m.out[c(1:xlen)+(i*2-1)*xlen]<-m[c(1:xlen)+(i-1)*xlen]
+	}
+	m.out
+}
+#'@export
 gainAdjust.fnResShiftSingle<-function( pars, #parameters 
 		y, #the response, two duplicated data in vector
 		x, #the independent variable, log-transformed
@@ -582,7 +604,8 @@ gainAdjust.fnResShiftSingle<-function( pars, #parameters
 		#ylog=TRUE, shift.index=1,
 		aggregated=TRUE #indicated whether the data has been aggregated, mean the two repeats has been averaged
 	#				by default it is not. So in this case we need to give the two repeat the identical shift, k
-		, model.weight="uniform", order=1
+		, model.weight="uniform", order=1,
+		mvar###this is used to pass in the 
 		)
 	{
 		####check the input to make sure the input are in the correct format
@@ -618,7 +641,7 @@ gainAdjust.fnResShiftSingle<-function( pars, #parameters
 		#			stop("the parameters k for shifting the data x series are not set with correct size--error02!")
 		#		}
 		#}
-		
+		wmatrix<-mvar
 		if(aggregated)
 		{
 			xRepeat<-1;
@@ -626,6 +649,7 @@ gainAdjust.fnResShiftSingle<-function( pars, #parameters
 		else
 		{
 			xRepeat<-2
+			wmatrix<-rep(mvar,2)
 		}
 		#ks<-c(1,2,3)
 		#ks<-c(0,ks)
@@ -645,7 +669,7 @@ gainAdjust.fnResShiftSingle<-function( pars, #parameters
 		ks<-rep(ks,xRepeat)
 		#ks<-rep(ks,rep(xlen, length(ks)))
 		xinput<-x+ks
-		
+		#cat("xinput:",xinput,"\n")
 		if(missing(d))
 		{
 			d<-pmt_saturated_reading
@@ -668,11 +692,16 @@ gainAdjust.fnResShiftSingle<-function( pars, #parameters
 		
 		pred<-a+(d-a)/(1+exp((xmid-xinput)/scal))^g
 		m<-weight.matrix(pred,model.weight,order)
+		if(!missing(mvar))
+		{
+			#cat("duplicated wmatrix:",wmatrix,"\n")
+			m<-wmatrix;
+		}
 		#cat("\ny:",y, "\n")
 		#cat("\npred:", pred, "\n")
 		#cat("ks:", ks, "\n")
 		#cat("RSS:", sum((log(y)-log(pred))*(log(y)-log(pred))),"\n")
-		log(y)-log(pred) #/m #sqrt(abs(pred))#pred #^2#*(pred)
+		(log(y)-log(pred))/m #sqrt(abs(pred))#pred #^2#*(pred)
 	}
 	
 	#this is the function used to calcuate the weight matrix 
