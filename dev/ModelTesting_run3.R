@@ -34,7 +34,8 @@
 ##########################################
 library(ARPPA)
 ##first checking for homoscedastical dataset
-setwd("H:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\UnEqualVar_NegativeCon_Trans")
+#setwd("H:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\UnEqualVar_NegativeCon_Trans")
+setwd("E:\\feng\\LAB\\hg\\proteinArray_Masa\\ARPPA\\data\\UnEqualVar_NegativeCon_Trans")
 nGene<-2000
 nTreatment<-2   #number of different beta
 sampleSize<-5 ##this is the number of repeats for each group

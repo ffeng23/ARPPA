@@ -1,7 +1,13 @@
 #function to process the simulated data, 
-# feng@BU 12/15/2016
+# feng@BU 08/30/2017
+#
+# 0) revise the model Y=a+b+g+k*e    scale and location model, effects of both additive and multiplicative
 #
 #1) read the data from the disk
+#1a) estimate the overall variance as a surgate variance of base level
+#1b) estimate k by Empirical bayes with a sample variance versus population variance (following a ki-square distribution)
+#1c) derive posterior distribution of k
+#1d) rescale/transform y by scaled off k to lead to equal variance model 
 #2) process to see the linear regress results
 #		pick the top portions to see the identification performance
 #		fdr
@@ -64,6 +70,25 @@ for(i in c(1:repeats))
 	lstData<-get(object.load);#lstToSave
 	eval(paste("rm(",object.load,")",sep=""))
 	
+	#estimate k posterior------------>
+	dataExp_EN<-dataExp_EN_List[[1]]
+	sMean<-sampleMean(dataExp_EN, nTreatment, sampleSize)
+	sVar<-sampleVariance(dataExp_EN, nTreatment, sampleSize)
+	sdf<-sampleSizes(dataExp_EN, nTreatment, sampleSize)-1
+	#get the sample variance prior by assuming a scale-chisquare
+	s2<-as.vector(as.matrix(sVar))
+	df<-as.vector(as.matrix(sdf))
+	
+	r2<-sampleVariancePrior(s2,df)
+	s02<-r2[[2]]
+	df0<-r2[[1]]
+	
+	#calculate the posterior variance
+	var_pos<-sampleVariancePosterior(sdf,sVar,  df0, s02 )
+	var_pos_vec<-(as.vector(t(var_pos)))
+	var_pos_vec_all<-rep(var_pos_vec,rep(5, length(var_pos_vec)))
+	
+	-->>>>>>>
 	#try to know which one is nonZero as the true values
 	gammaTrue<-lstData$data$gamma
 	if(mode==1)

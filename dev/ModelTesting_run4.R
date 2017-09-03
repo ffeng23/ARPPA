@@ -129,7 +129,7 @@ rtlist<-analyzeData(path=filePath,filename="result_", repeats=100,
 					sample.size=5,
 					proportion.nonZero=0.02, 
 					object.load="lstToSave_ENC",
-					mode=1);
+					mode=1); # <<----mode of 1
 					
 					
 					
@@ -139,6 +139,6 @@ rtlist<-analyzeData(path=filePath,filename="result_", repeats=100,
 					sample.size=5,
 					proportion.nonZero=0.02, 
 					object.load="lstToSave_ENC",
-					mode=2);
+					mode=2); #<<---mode of 2
 					
 	
